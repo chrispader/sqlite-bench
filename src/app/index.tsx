@@ -8,8 +8,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const ITERATIONS = 1000;
 const COOL_DOWN_MS = 2500;
 
-type BenchResult = { label: string; ms: number };
-type BenchSection = { title: string; color: string; results: BenchResult[] };
+type BenchResult = { label: string; ms: number; group: string; color: string };
+type BenchGroup = { title: string; results: BenchResult[] };
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -33,13 +33,16 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
     "CREATE TABLE bench (id INTEGER PRIMARY KEY, name TEXT, value REAL)",
   );
 
+  await cooldown();
   // sync inserts
   let t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
     db.executeSync("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
   }
   results.push({
-    label: "op-sqlite · sync insert 1k",
+    label: "op-sqlite",
+    group: "sync insert",
+    color: "#f97316",
     ms: performance.now() - t,
   });
 
@@ -52,7 +55,9 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
     await db.execute("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
   }
   results.push({
-    label: "op-sqlite · async insert 1k",
+    label: "op-sqlite",
+    group: "async insert",
+    color: "#f97316",
     ms: performance.now() - t,
   });
 
@@ -71,19 +76,9 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
     }
   });
   results.push({
-    label: "op-sqlite · tx insert 1k",
-    ms: performance.now() - t,
-  });
-
-  await cooldown();
-
-  // select all
-  t = performance.now();
-  for (let i = 0; i < ITERATIONS; i++) {
-    await db.execute("SELECT * FROM bench");
-  }
-  results.push({
-    label: "op-sqlite · select 1k×1k",
+    label: "op-sqlite",
+    group: "tx insert",
+    color: "#f97316",
     ms: performance.now() - t,
   });
 
@@ -95,7 +90,28 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
     await db.executeWithHostObjects("SELECT * FROM bench");
   }
   results.push({
-    label: "op-sqlite · select 1k×1k (HostObjects)",
+    label: "op-sqlite (HostObjects)",
+    group: "select + read props",
+    color: "#f97316",
+    ms: performance.now() - t,
+  });
+
+  await cooldown();
+
+  // select + access props
+  t = performance.now();
+  for (let i = 0; i < ITERATIONS; i++) {
+    const res = await db.execute("SELECT * FROM bench");
+    for (const row of res.rows) {
+      void row["id"];
+      void row["name"];
+      void row["value"];
+    }
+  }
+  results.push({
+    label: "op-sqlite",
+    group: "select + read props",
+    color: "#f97316",
     ms: performance.now() - t,
   });
 
@@ -123,7 +139,9 @@ async function benchNitroSQLite(): Promise<BenchResult[]> {
     conn.execute("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
   }
   results.push({
-    label: "nitro-sqlite · sync insert 1k (HybridObjects)",
+    label: "nitro-sqlite",
+    group: "sync insert",
+    color: "#a78bfa",
     ms: performance.now() - t,
   });
 
@@ -140,7 +158,9 @@ async function benchNitroSQLite(): Promise<BenchResult[]> {
     ]);
   }
   results.push({
-    label: "nitro-sqlite · async insert 1k (HybridObjects)",
+    label: "nitro-sqlite",
+    group: "async insert",
+    color: "#a78bfa",
     ms: performance.now() - t,
   });
 
@@ -159,19 +179,28 @@ async function benchNitroSQLite(): Promise<BenchResult[]> {
     }
   });
   results.push({
-    label: "nitro-sqlite · tx insert 1k (HybridObjects)",
+    label: "nitro-sqlite",
+    group: "tx insert",
+    color: "#a78bfa",
     ms: performance.now() - t,
   });
 
   await cooldown();
 
-  // select all
+  // select + access props
   t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    await conn.executeAsync("SELECT * FROM bench");
+    const res = await conn.executeAsync("SELECT * FROM bench");
+    for (const row of res.rows._array) {
+      void row["id"];
+      void row["name"];
+      void row["value"];
+    }
   }
   results.push({
-    label: "nitro-sqlite · select 1k×1k (HybridObjects)",
+    label: "nitro-sqlite",
+    group: "select + read props",
+    color: "#a78bfa",
     ms: performance.now() - t,
   });
 
@@ -199,7 +228,9 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
     db.runSync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
   }
   results.push({
-    label: "expo-sqlite · sync insert 1k",
+    label: "expo-sqlite",
+    group: "sync insert",
+    color: "#34d399",
     ms: performance.now() - t,
   });
 
@@ -212,7 +243,9 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
     await db.runAsync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
   }
   results.push({
-    label: "expo-sqlite · async insert 1k",
+    label: "expo-sqlite",
+    group: "async insert",
+    color: "#34d399",
     ms: performance.now() - t,
   });
 
@@ -232,19 +265,32 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
     }
   });
   results.push({
-    label: "expo-sqlite · tx insert 1k",
+    label: "expo-sqlite",
+    group: "tx insert",
+    color: "#34d399",
     ms: performance.now() - t,
   });
 
   await cooldown();
 
-  // select all
+  // select + access props
   t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    await db.getAllAsync("SELECT * FROM bench");
+    const rows = await db.getAllAsync<{
+      id: number;
+      name: string;
+      value: number;
+    }>("SELECT * FROM bench");
+    for (const row of rows) {
+      void row.id;
+      void row.name;
+      void row.value;
+    }
   }
   results.push({
-    label: "expo-sqlite · select 1k×1k",
+    label: "expo-sqlite",
+    group: "select + read props",
+    color: "#34d399",
     ms: performance.now() - t,
   });
 
@@ -257,14 +303,17 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-const SECTIONS: { title: string; color: string }[] = [
-  { title: "op-sqlite", color: "#f97316" },
-  { title: "nitro-sqlite", color: "#a78bfa" },
-  { title: "expo-sqlite", color: "#34d399" },
-];
+function groupResults(results: BenchResult[]): BenchGroup[] {
+  const map = new Map<string, BenchResult[]>();
+  for (const r of results) {
+    if (!map.has(r.group)) map.set(r.group, []);
+    map.get(r.group)!.push(r);
+  }
+  return Array.from(map, ([title, results]) => ({ title, results }));
+}
 
 export default function HomeScreen() {
-  const [sections, setSections] = useState<BenchSection[]>([]);
+  const [results, setResults] = useState<BenchResult[]>([]);
   const [status, setStatus] = useState("starting…");
   const ran = useRef(false);
 
@@ -276,21 +325,15 @@ export default function HomeScreen() {
       try {
         setStatus("running op-sqlite…");
         const opResults = await benchOpSQLite();
-        setSections([{ ...SECTIONS[0]!, results: opResults }]);
+        setResults(opResults);
 
         setStatus("running nitro-sqlite…");
         const nitroResults = await benchNitroSQLite();
-        setSections((prev) => [
-          ...prev,
-          { ...SECTIONS[1]!, results: nitroResults },
-        ]);
+        setResults((prev) => [...prev, ...nitroResults]);
 
         setStatus("running expo-sqlite…");
         const expoResults = await benchExpoSQLite();
-        setSections((prev) => [
-          ...prev,
-          { ...SECTIONS[2]!, results: expoResults },
-        ]);
+        setResults((prev) => [...prev, ...expoResults]);
 
         setStatus("done");
       } catch (e: any) {
@@ -298,6 +341,9 @@ export default function HomeScreen() {
       }
     })();
   }, []);
+
+  const groups = groupResults(results);
+  const maxMs = Math.max(...results.map((r) => r.ms), 1);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -307,51 +353,39 @@ export default function HomeScreen() {
       </Text>
       {status !== "done" && <Text style={styles.status}>{status}</Text>}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>
-        {(() => {
-          const maxMs = Math.max(
-            ...sections.flatMap((s) => s.results.map((r) => r.ms)),
-            1,
-          );
-          return sections.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <View
-                style={[
-                  styles.sectionHeader,
-                  { borderLeftColor: section.color },
-                ]}
-              >
-                <Text style={[styles.sectionTitle, { color: section.color }]}>
-                  {section.title}
-                </Text>
-              </View>
-              {section.results.map((r) => {
-                const shortLabel = r.label.replace(/^[^·]+· /, "");
-                const pct = r.ms / maxMs;
-                return (
-                  <View key={r.label} style={styles.barRow}>
-                    <View style={styles.barMeta}>
-                      <Text style={styles.label}>{shortLabel}</Text>
-                      <Text style={[styles.ms, { color: section.color }]}>
-                        {r.ms.toFixed(1)} ms
-                      </Text>
-                    </View>
-                    <View style={styles.barTrack}>
-                      <View
-                        style={[
-                          styles.barFill,
-                          {
-                            width: `${pct * 100}%` as `${number}%`,
-                            backgroundColor: section.color,
-                          },
-                        ]}
-                      />
-                    </View>
-                  </View>
-                );
-              })}
+        {groups.map((group) => (
+          <View key={group.title} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{group.title}</Text>
             </View>
-          ));
-        })()}
+            {group.results.map((r) => {
+              const pct = r.ms / maxMs;
+              return (
+                <View key={r.label} style={styles.barRow}>
+                  <View style={styles.barMeta}>
+                    <Text style={[styles.label, { color: r.color }]}>
+                      {r.label}
+                    </Text>
+                    <Text style={[styles.ms, { color: r.color }]}>
+                      {r.ms.toFixed(1)} ms
+                    </Text>
+                  </View>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        {
+                          width: `${pct * 100}%` as `${number}%`,
+                          backgroundColor: r.color,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ))}
         <Text style={styles.footnote}>
           * Host/Hybrid Objects shift some cost to runtime — property access
           triggers the JSI conversion lazily rather than upfront.
@@ -374,7 +408,12 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     marginBottom: 2,
   },
-  sectionTitle: { fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
+  sectionTitle: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
   barRow: {
     gap: 4,
   },
