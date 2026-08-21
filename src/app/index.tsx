@@ -37,7 +37,13 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
   // sync inserts
   let t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    db.executeSync("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
+    const res = db.executeSync("INSERT INTO bench VALUES (?,?,?)", [
+      i,
+      `n${i}`,
+      i * 1.5,
+    ]);
+    void res.insertId;
+    void res.rows.length
   }
   results.push({
     label: "op-sqlite",
@@ -52,7 +58,13 @@ async function benchOpSQLite(): Promise<BenchResult[]> {
   // async inserts
   t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    await db.execute("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
+    const res = await db.execute("INSERT INTO bench VALUES (?,?,?)", [
+      i,
+      `n${i}`,
+      i * 1.5,
+    ]);
+    void res.insertId;
+    void res.rows.length
   }
   results.push({
     label: "op-sqlite",
@@ -136,7 +148,13 @@ async function benchNitroSQLite(): Promise<BenchResult[]> {
   // sync inserts
   let t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    conn.execute("INSERT INTO bench VALUES (?,?,?)", [i, `n${i}`, i * 1.5]);
+    const res = conn.execute("INSERT INTO bench VALUES (?,?,?)", [
+      i,
+      `n${i}`,
+      i * 1.5,
+    ]);
+    void res.insertId;
+        void res.rows.length
   }
   results.push({
     label: "nitro-sqlite",
@@ -151,11 +169,13 @@ async function benchNitroSQLite(): Promise<BenchResult[]> {
   // async inserts
   t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    await conn.executeAsync("INSERT INTO bench VALUES (?,?,?)", [
+    const res = await conn.executeAsync("INSERT INTO bench VALUES (?,?,?)", [
       i,
       `n${i}`,
       i * 1.5,
     ]);
+    void res.insertId;
+        void res.rows.length
   }
   results.push({
     label: "nitro-sqlite",
@@ -225,7 +245,8 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
   // sync inserts
   let t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    db.runSync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
+    const res = db.runSync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
+    void res.lastInsertRowId;
   }
   results.push({
     label: "expo-sqlite",
@@ -240,7 +261,8 @@ async function benchExpoSQLite(): Promise<BenchResult[]> {
   // async inserts
   t = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    await db.runAsync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
+    const res = await db.runAsync("INSERT INTO bench VALUES (?,?,?)", i, `n${i}`, i * 1.5);
+    void res.lastInsertRowId;
   }
   results.push({
     label: "expo-sqlite",
