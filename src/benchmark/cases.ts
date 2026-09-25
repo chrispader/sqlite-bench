@@ -108,10 +108,11 @@ export function consume(result: QueryResult, count: number): number {
 }
 
 function rowChecksum(row: Row, index: number): number {
-  if (row.id !== index || row.name !== `n${index}` || row.value !== index * 1.5) {
+  const { id, name, value } = row;
+  if (id !== index || name !== `n${index}` || value !== index * 1.5) {
     throw new Error(`Wrong row at index ${index}`);
   }
-  return row.id + row.value + row.name.length;
+  return id + value + name.length;
 }
 
 export function expectedChecksum(count: number): number {
