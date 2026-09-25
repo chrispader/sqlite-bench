@@ -4,13 +4,18 @@ const path = require("node:path");
 const test = require("node:test");
 const ts = require("typescript");
 
-const file = path.join(__dirname, "../src/benchmark/statistics.ts");
-const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const exportsFromModule = {};
-new Function("exports", compiled)(exportsFromModule);
-const { summarize } = exportsFromModule;
+const { summarize } = load("statistics.ts");
+const { unsupportedReason } = load("support.ts");
+
+function load(name) {
+  const file = path.join(__dirname, "../src/benchmark", name);
+  const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const exportsFromModule = {};
+  new Function("exports", compiled)(exportsFromModule);
+  return exportsFromModule;
+}
 
 test("summarizes individual samples with an order-independent median and spread", () => {
   const samples = [9, 1, 5, 3].map((ms, index) => ({ library: "op-sqlite", caseId: "read", round: index + 1, ms, checksum: 10 }));
@@ -28,4 +33,11 @@ test("suppresses a summary when any round failed, while preserving other cases",
   assert.deepEqual(summarize(samples, failures), [{
     library: "expo-sqlite", caseId: "read", medianMs: 8, minMs: 8, maxMs: 8, samples: [8],
   }]);
+});
+
+test("omits only Expo's exclusive callback transaction in normalized mode", () => {
+  assert.match(unsupportedReason("normalized WAL/FULL", "expo-sqlite", "transaction-insert"), /new connection/);
+  assert.equal(unsupportedReason("library defaults", "expo-sqlite", "transaction-insert"), null);
+  assert.equal(unsupportedReason("normalized WAL/FULL", "op-sqlite", "transaction-insert"), null);
+  assert.equal(unsupportedReason("normalized WAL/FULL", "expo-sqlite", "sync-insert"), null);
 });

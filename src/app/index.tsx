@@ -26,7 +26,7 @@ export default function HomeScreen() {
     setStatus("Starting…");
     runBenchmarks(setStatus, { ...settings, mode }).then((result) => {
       setRun(result);
-      setStatus(result.failures.length ? `${result.failures.length} workload failures` : "Done");
+      setStatus(result.failures.length ? `${result.failures.length} workload failures` : result.skipped.length ? `Done · ${result.skipped.length} unsupported workload` : "Done");
     }).catch((error: unknown) => {
       setStatus(`Run failed: ${error instanceof Error ? error.message : String(error)}`);
     }).finally(() => setRunning(false));
@@ -50,6 +50,7 @@ export default function HomeScreen() {
           {cases.map((benchmarkCase) => {
             const summaries = run.summaries.filter((summary) => summary.caseId === benchmarkCase.id);
             const failures = run.failures.filter((failure) => failure.caseId === benchmarkCase.id);
+            const skipped = run.skipped.filter((entry) => entry.caseId === benchmarkCase.id);
             return <View key={benchmarkCase.id} style={styles.section}>
               <Text style={styles.sectionTitle}>{benchmarkCase.label}</Text>
               {summaries.map((summary) => {
@@ -65,6 +66,7 @@ export default function HomeScreen() {
                 </View>;
               })}
               {failures.map((failure) => <Text key={`${failure.library}-${failure.round}`} style={styles.warning}>{failure.library} round {failure.round}: {failure.message}</Text>)}
+              {skipped.map((entry) => <Text key={`${entry.library}-skipped`} style={styles.warning}>{entry.library} omitted: {entry.reason}</Text>)}
             </View>;
           })}
           <Pressable onPress={() => void Share.share({ message: JSON.stringify(run, null, 2) })} style={styles.share}><Text style={styles.shareText}>Share run data and manifest</Text></Pressable>
