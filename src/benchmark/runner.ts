@@ -2,7 +2,8 @@ import { adapters } from "./adapters";
 import { cases } from "./cases";
 import { configure, databaseName, makeManifest, message, type Mode } from "./metadata";
 import { summarize } from "./statistics";
-import type { Adapter, Case, Failure, Sample } from "./types";
+import { unsupportedReason } from "./support";
+import type { Adapter, Case, Failure, Sample, Skipped } from "./types";
 
 export type Settings = { iterations: number; warmupRounds: number; measuredRounds: number; cooldownMs: number; mode: Mode };
 export const settings: Settings = { iterations: 250, warmupRounds: 1, measuredRounds: 3, cooldownMs: 2500, mode: "library defaults" };
@@ -11,6 +12,7 @@ export async function runBenchmarks(onProgress: (status: string) => void, option
   const manifest = await makeManifest(adapters, options);
   const samples: Sample[] = [];
   const failures: Failure[] = [];
+  const skipped: Skipped[] = [];
   const totalRounds = options.warmupRounds + options.measuredRounds;
 
   for (let round = 0; round < totalRounds; round++) {
@@ -18,6 +20,13 @@ export async function runBenchmarks(onProgress: (status: string) => void, option
       const benchmarkCase = cases[caseIndex];
       const eligible = rotate(adapters.filter((adapter) => benchmarkCase.libraries.includes(adapter.id)), round + caseIndex);
       for (const adapter of eligible) {
+        const reason = unsupportedReason(options.mode, adapter.id, benchmarkCase.id);
+        if (reason) {
+          if (!skipped.some((entry) => entry.library === adapter.id && entry.caseId === benchmarkCase.id)) {
+            skipped.push({ library: adapter.id, caseId: benchmarkCase.id, reason });
+          }
+          continue;
+        }
         onProgress(`${round < options.warmupRounds ? "warmup" : `round ${round}`} · ${benchmarkCase.label} · ${adapter.label}`);
         try {
           const sample = await runOne(adapter, benchmarkCase, round, options);
@@ -28,7 +37,8 @@ export async function runBenchmarks(onProgress: (status: string) => void, option
       }
     }
   }
-  return { manifest, samples, summaries: summarize(samples, failures), failures };
+  if (skipped.length) manifest.warnings.push(`${skipped.length} unsupported workload combination(s) were omitted; see skipped cases.`);
+  return { manifest, samples, summaries: summarize(samples, failures), failures, skipped };
 }
 
 async function runOne(adapter: Adapter, benchmarkCase: Case, round: number, options: Settings): Promise<Sample> {

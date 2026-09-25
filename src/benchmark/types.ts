@@ -47,4 +47,5 @@ export type Case = {
 
 export type Sample = { library: LibraryId; caseId: string; round: number; ms: number; checksum: number };
 export type Failure = { library: LibraryId; caseId: string; round: number; message: string };
+export type Skipped = { library: LibraryId; caseId: string; reason: string };
 export type Summary = { library: LibraryId; caseId: string; medianMs: number; minMs: number; maxMs: number; samples: number[] };
