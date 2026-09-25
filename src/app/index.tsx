@@ -65,6 +65,9 @@ export default function HomeScreen() {
                 </View>;
               })}
               {failures.map((failure) => <Text key={`${failure.library}-${failure.round}`} style={styles.warning}>{failure.library} round {failure.round}: {failure.message}</Text>)}
+              {Object.entries(benchmarkCase.unsupported ?? {}).map(([library, reason]) =>
+                <Text key={library} style={styles.detail}>{library}: unsupported ({reason})</Text>
+              )}
             </View>;
           })}
           <Pressable onPress={() => void Share.share({ message: JSON.stringify(run, null, 2) })} style={styles.share}><Text style={styles.shareText}>Share run data and manifest</Text></Pressable>

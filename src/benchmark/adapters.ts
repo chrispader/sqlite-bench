@@ -18,6 +18,29 @@ const op: Adapter = {
         executeAsync: async (sql, params) => normalize(await tx.execute(sql, params)),
       })),
       executeHostObjects: async (sql) => normalize(await db.executeWithHostObjects(sql)),
+      prepare: (sql) => {
+        let statement: ReturnType<typeof db.prepareStatement> | undefined = db.prepareStatement(sql);
+        const current = () => {
+          if (!statement) throw new Error("Prepared statement disposed");
+          return statement;
+        };
+        return {
+          executeSync: (params) => {
+            const prepared = current();
+            prepared.bindSync(params);
+            return normalize(prepared.executeSync());
+          },
+          executeAsync: async (params) => {
+            const prepared = current();
+            prepared.bindSync(params);
+            return normalize(await prepared.execute());
+          },
+          // op-sqlite has no public finalize method. Releasing this reference
+          // leaves the native handle to the library's own lifetime management.
+          dispose: () => { statement = undefined; },
+        };
+      },
+      batchAsync: async (sql, params) => (await db.executeBatch([[sql, params]])).rowsAffected,
       close: () => db.close(),
     };
   },
@@ -34,6 +57,15 @@ const nitro: Adapter = {
       transaction: async (callback) => db.transaction(async (tx) => callback({
         executeAsync: async (sql, params) => nitroResult(await tx.executeAsync(sql, params)),
       })),
+      prepare: (sql) => {
+        const statement = db.prepare(sql);
+        return {
+          executeSync: (params) => nitroResult(statement.execute(params)),
+          executeAsync: async (params) => nitroResult(await statement.executeAsync(params)),
+          dispose: () => statement.finalize(),
+        };
+      },
+      batchAsync: async (sql, params) => (await db.executeBatchAsync([{ query: sql, params }])).rowsAffected,
       close: () => db.close(),
     };
   },
@@ -50,6 +82,24 @@ const expo: Adapter = {
       transaction: async (callback) => db.withExclusiveTransactionAsync(async (tx) => callback({
         executeAsync: async (sql, params) => expoAsync(tx, sql, params),
       })),
+      prepare: (sql, kind) => {
+        const statement = db.prepareSync(sql);
+        return {
+          executeSync: (params) => {
+            const result = statement.executeSync<Row>(params);
+            return kind === "read"
+              ? { rows: result.getAllSync(), rowsAffected: 0 }
+              : { rows: [], rowsAffected: result.changes };
+          },
+          executeAsync: async (params) => {
+            const result = await statement.executeAsync<Row>(params);
+            return kind === "read"
+              ? { rows: await result.getAllAsync(), rowsAffected: 0 }
+              : { rows: [], rowsAffected: result.changes };
+          },
+          dispose: () => statement.finalizeSync(),
+        };
+      },
       close: () => db.closeSync(),
     };
   },
